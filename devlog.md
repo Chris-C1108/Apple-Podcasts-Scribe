@@ -1,5 +1,14 @@
 # Development Log
 
+## 2026-01-21: Robust Podcast Metadata Lookup
+
+### Podcast Service Resilience
+- **Issue**: Some podcasts (e.g., "All Ears English") were failing to load metadata with "Network error". This was occurring because the direct fetch to `itunes.apple.com/lookup` was being blocked in certain network environments or for specific requests, despite iTunes generally supporting CORS.
+- **Resolution**:
+  - Implemented a **Proxy Fallback Mechanism** in `services/podcastService.ts` for the `fetchPodcastData` function.
+  - The service now attempts a direct fetch first. If that fails (catches an error), it logs a warning and automatically retries the request using the `podscribe-proxy` (`https://podscribe-proxy.uni-kui.shop`).
+- **Outcome**: This ensures that metadata lookup is resilient to sporadic network blocks or strict browser environments, significantly improving the success rate for loading different podcasts.
+
 ## 2026-01-21: Streamed Transcription & Versioning
 
 ### Streamed Audio Transcription

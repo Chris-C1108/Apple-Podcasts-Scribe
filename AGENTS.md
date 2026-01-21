@@ -67,7 +67,7 @@ Apple-Podcasts-Scribe is a web application that searches for Apple Podcasts, ret
         *   **Worker URL**: `https://podscribe-proxy.uni-kui.shop`
         *   **Source Code**: `cloudflare-worker/worker.js`
         *   **Configuration**: `cloudflare-worker/wrangler.toml`
-        *   *Note*: iTunes Search/Lookup APIs are accessed DIRECTLY (CORS supported), bypassing the proxy to avoid IP blocks.
+        *   *Note*: iTunes Search/Lookup APIs are primarily accessed DIRECTLY. However, a **proxy fallback** logic is implemented in `podcastService.ts`. If the direct connection to `itunes.apple.com` fails (e.g., due to strict network conditions or CORS blocks), the request is automatically retried via the proxy.
     *   **Gemini API Proxy**: Google GenAI requests are proxied to bypass network restrictions.
         *   **Worker URL**: `https://gemni.uni-kui.shop`
         *   **Source Code**: `cloudflare-worker/gemini-worker.js`

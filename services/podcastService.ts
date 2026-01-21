@@ -64,11 +64,22 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout 
   }
 };
 
+// Base URL for the proxy - this should be your deployed worker URL
+// Example: https://podscribe-proxy.your-subdomain.workers.dev
+// For local dev, you might need to run the worker locally or point to deployed one
+const PROXY_BASE_URL = "https://podscribe-proxy.uni-kui.workers.dev";
+
+// Helper to wrap URL with our worker proxy
+const getProxyUrl = (targetUrl: string) => {
+  return `${PROXY_BASE_URL}?url=${encodeURIComponent(targetUrl)}`;
+};
+
 export const searchPodcasts = async (term: string, onLog?: Logger): Promise<PodcastSearchResult[]> => {
   try {
     const encodedTerm = encodeURIComponent(term);
     const searchUrl = `https://itunes.apple.com/search?term=${encodedTerm}&entity=podcast&limit=10`;
-    const searchProxy = `https://corsproxy.io/?${encodeURIComponent(searchUrl)}`;
+    // Use our Cloudflare Worker proxy
+    const searchProxy = getProxyUrl(searchUrl);
 
     onLog?.(`Searching iTunes for: "${term}"`);
 
@@ -84,7 +95,7 @@ export const searchPodcasts = async (term: string, onLog?: Logger): Promise<Podc
       throw new Error("Failed to contact podcast directory.");
     }
     
-    // corsproxy returns direct JSON, no .contents wrapper
+    // Cloudflare worker returns the direct JSON response
     const parsedSearch = searchData;
     onLog?.(`Found ${parsedSearch.resultCount} results.`);
 
@@ -117,10 +128,10 @@ export const fetchPodcastData = async (url: string, onLog?: Logger): Promise<Pod
     onLog?.(`Found Show ID: ${showId}${slug ? `, Slug: ${slug}` : ''}`);
 
     const lookupUrl = `https://itunes.apple.com/lookup?id=${showId}&entity=podcast`;
-    // Use corsproxy.io as a more reliable proxy
-    const lookupProxy = `https://corsproxy.io/?${encodeURIComponent(lookupUrl)}`;
+    // Use our Cloudflare Worker proxy
+    const lookupProxy = getProxyUrl(lookupUrl);
     
-    onLog?.(`Fetching podcast metadata via proxy: ${lookupProxy}`);
+    onLog?.(`Fetching podcast metadata via proxy...`);
 
     let lookupData;
     try {
@@ -130,13 +141,11 @@ export const fetchPodcastData = async (url: string, onLog?: Logger): Promise<Pod
     } catch (e: any) {
       console.error("Lookup proxy failed:", e);
       onLog?.(`Lookup proxy failed: ${e.message}`);
-      // Fallback: If corsproxy fails, try a user-friendly error or another proxy
+      // Fallback: If proxy fails
       if (e.name === 'AbortError') throw new Error("Request timed out. Please check your connection.");
       throw new Error("Failed to contact podcast directory. Network or proxy error.");
     }
     
-    // Check if the response is from corsproxy (direct JSON) or allorigins (wrapped in contents)
-    // corsproxy.io returns the raw JSON directly, so we use it as is.
     const parsedLookup = lookupData;
 
     if (parsedLookup.resultCount === 0) return null;
@@ -174,7 +183,7 @@ export const fetchPodcastData = async (url: string, onLog?: Logger): Promise<Pod
       console.warn(msg);
       onLog?.(msg);
       try {
-        const feedProxy = `https://corsproxy.io/?${encodeURIComponent(feedUrl)}`;
+        const feedProxy = getProxyUrl(feedUrl);
         const feedRes = await fetchWithTimeout(feedProxy, {}, 60000); // 60s timeout for proxy (slower for large files)
         if (!feedRes.ok) throw new Error(`RSS Proxy status: ${feedRes.status}`);
         const feedText = await feedRes.text();

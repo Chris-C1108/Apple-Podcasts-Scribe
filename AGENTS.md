@@ -61,9 +61,10 @@ Apple-Podcasts-Scribe is a web application that searches for Apple Podcasts, ret
     *   Pass the `addLog` (or `onLog`) callback to services to report progress.
     *   Type definition: `export type Logger = (message: string) => void;`
 *   **Console**: Use `console.error` for debugging, but *always* notify the user via `addLog` or UI state for critical failures.
-*   **Proxy Handling**: Network requests to iTunes/RSS often require a CORS proxy (`api.allorigins.win`).
-    *   Handle `AbortError` for timeouts (default search timeout: 10s).
-    *   Handle `500`/`403` proxy errors gracefully.
+*   **Proxy Handling**: Network requests to iTunes/RSS are proxied via a custom Cloudflare Worker.
+    *   The worker code is in `cloudflare-worker/worker.js`.
+    *   `PROXY_BASE_URL` in `services/podcastService.ts` points to the deployed worker.
+    *   Handle `AbortError` for timeouts.
 
 ### Naming Conventions
 *   **Files**: PascalCase for Components (`PodcastCard.tsx`), camelCase for utilities/services (`podcastService.ts`).

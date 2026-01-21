@@ -74,13 +74,13 @@ export const searchPodcasts = async (term: string, onLog?: Logger): Promise<Podc
 
     let searchData;
     try {
-      const searchRes = await fetchWithTimeout(searchProxy, {}, 15000);
+      const searchRes = await fetchWithTimeout(searchProxy, {}, 10000);
       if (!searchRes.ok) throw new Error(`Proxy error: ${searchRes.status}`);
       searchData = await searchRes.json();
     } catch (e: any) {
       console.error("Search proxy failed:", e);
       onLog?.(`Search proxy failed: ${e.message}`);
-      if (e.name === 'AbortError') throw new Error("Search timed out. Please check your connection.");
+      if (e.name === 'AbortError') throw new Error("Search timed out (10s limit). Please check your connection.");
       throw new Error("Failed to contact podcast directory.");
     }
 

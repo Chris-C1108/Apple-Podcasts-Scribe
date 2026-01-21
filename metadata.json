@@ -1,0 +1,7 @@
+{
+  "name": "PodScribe AI",
+  "description": "An advanced Apple Podcasts transcription tool that converts podcast audio links directly into high-quality text using Gemini AI.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

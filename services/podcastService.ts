@@ -67,7 +67,7 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout 
 // Base URL for the proxy - this should be your deployed worker URL
 // Example: https://podscribe-proxy.your-subdomain.workers.dev
 // For local dev, you might need to run the worker locally or point to deployed one
-const PROXY_BASE_URL = "https://podscribe-proxy.uni-kui.workers.dev";
+const PROXY_BASE_URL = "https://podscribe-proxy.uni-kui.shop";
 
 // Helper to wrap URL with our worker proxy
 const getProxyUrl = (targetUrl: string) => {

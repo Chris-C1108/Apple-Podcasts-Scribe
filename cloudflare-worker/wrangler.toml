@@ -2,5 +2,12 @@ name = "podscribe-proxy"
 main = "worker.js"
 compatibility_date = "2024-01-21"
 
+# Custom Domain Configuration
+# Ensure 'uni-kui.shop' is added to your Cloudflare account
+routes = [
+	{ pattern = "podscribe-proxy.uni-kui.shop", custom_domain = true }
+]
+
 [placement]
 mode = "smart"
+

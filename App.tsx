@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import Header from './components/Header';
 import PodcastCard from './components/PodcastCard';
 import EpisodeList from './components/EpisodeList';
+import LogConsole from './components/LogConsole';
 import { fetchPodcastData, downloadAudioAsBase64 } from './services/podcastService';
 import { transcribeAudio } from './services/geminiService';
 import { PodcastMetadata, PodcastEpisode, TranscriptionResult } from './types';
@@ -19,6 +20,11 @@ const App: React.FC = () => {
     status: 'idle'
   });
   const [loadingStep, setLoadingStep] = useState<string>('');
+  const [logs, setLogs] = useState<string[]>([]);
+
+  const addLog = (message: string) => {
+    setLogs(prev => [...prev, message]);
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,10 +34,12 @@ const App: React.FC = () => {
     setCollection(null);
     setEpisodes([]);
     setSelectedEpisode(null);
+    setLogs([]);
     setLoadingStep('Locating RSS feed...');
 
     try {
-      const data = await fetchPodcastData(url);
+      addLog(`Starting search for URL: ${url}`);
+      const data = await fetchPodcastData(url, addLog);
       if (!data) throw new Error("Could not find podcast. Please check the URL.");
       
       setCollection(data.collection || null);
@@ -39,11 +47,15 @@ const App: React.FC = () => {
       
       if (data.isSpecificEpisode && data.episodes.length === 1) {
         setSelectedEpisode(data.episodes[0]);
+        addLog(`Auto-selected specific episode: ${data.episodes[0].trackName}`);
       }
       
       setTranscription({ text: '', status: 'idle' });
+      addLog("Search completed successfully.");
     } catch (err: any) {
-      setTranscription({ text: '', status: 'error', error: err.message });
+      const errorMsg = err.message || "Unknown error";
+      setTranscription({ text: '', status: 'error', error: errorMsg });
+      addLog(`Search Error: ${errorMsg}`);
     } finally {
       setLoadingStep('');
     }
@@ -52,25 +64,32 @@ const App: React.FC = () => {
   const handleTranscribe = async () => {
     if (!selectedEpisode?.episodeUrl) {
       setTranscription({ ...transcription, status: 'error', error: "No audio URL found for this episode." });
+      addLog("Error: No audio URL found.");
       return;
     }
 
     setTranscription({ ...transcription, status: 'processing' });
     setLoadingStep('Downloading audio stream...');
+    addLog(`Starting transcription for: ${selectedEpisode.trackName}`);
 
     try {
-      const base64 = await downloadAudioAsBase64(selectedEpisode.episodeUrl);
+      const base64 = await downloadAudioAsBase64(selectedEpisode.episodeUrl, addLog);
       
       setLoadingStep('AI is generating transcript...');
-      const text = await transcribeAudio(base64);
+      addLog("Audio downloaded. Starting AI transcription...");
+      
+      const text = await transcribeAudio(base64, 'audio/mpeg', addLog);
       
       setTranscription({ text, status: 'completed' });
+      addLog("Transcription completed successfully.");
     } catch (err: any) {
+      const errorMsg = err.message || "Failed to process audio.";
       setTranscription({ 
         text: '', 
         status: 'error', 
-        error: err.message || "Failed to process audio." 
+        error: errorMsg 
       });
+      addLog(`Transcription Error: ${errorMsg}`);
     } finally {
       setLoadingStep('');
     }
@@ -136,6 +155,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Content Section */}
+        <LogConsole logs={logs} />
         <div className="space-y-8">
           {selectedEpisode && (
             <div className="space-y-6">

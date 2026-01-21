@@ -1,5 +1,5 @@
 
-import { PodcastLookupResult, PodcastEpisode, PodcastMetadata } from '../types';
+import { PodcastLookupResult, PodcastEpisode, PodcastMetadata, Logger } from '../types';
 
 const parseRSSFeed = (xmlString: string, artistName: string, defaultArtwork: string): PodcastEpisode[] => {
   const parser = new DOMParser();
@@ -64,7 +64,7 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout 
   }
 };
 
-export const fetchPodcastData = async (url: string): Promise<PodcastLookupResult | null> => {
+export const fetchPodcastData = async (url: string, onLog?: Logger): Promise<PodcastLookupResult | null> => {
   try {
     const showIdMatch = url.match(/id(\d+)/);
     const slugMatch = url.match(/podcast\/([^/]+)\/id/);
@@ -74,18 +74,22 @@ export const fetchPodcastData = async (url: string): Promise<PodcastLookupResult
     const showId = showIdMatch[1];
     const slug = slugMatch ? slugMatch[1] : null;
 
+    onLog?.(`Found Show ID: ${showId}${slug ? `, Slug: ${slug}` : ''}`);
+
     const lookupUrl = `https://itunes.apple.com/lookup?id=${showId}&entity=podcast`;
     // Use allorigins as a proxy to bypass CORS for iTunes API which doesn't support CORS
     const lookupProxy = `https://api.allorigins.win/get?url=${encodeURIComponent(lookupUrl)}`;
     
+    onLog?.(`Fetching podcast metadata via proxy: ${lookupProxy}`);
+
     let lookupData;
     try {
-      // 15s timeout for lookup
-      const lookupRes = await fetchWithTimeout(lookupProxy, {}, 15000);
+      const lookupRes = await fetchWithTimeout(lookupProxy, {}, 30000);
       if (!lookupRes.ok) throw new Error(`Proxy error: ${lookupRes.status}`);
       lookupData = await lookupRes.json();
     } catch (e: any) {
       console.error("Lookup proxy failed:", e);
+      onLog?.(`Lookup proxy failed: ${e.message}`);
       // Fallback: If allorigins fails, try a user-friendly error or another proxy
       if (e.name === 'AbortError') throw new Error("Request timed out. Please check your connection.");
       throw new Error("Failed to contact podcast directory. Network or proxy error.");
@@ -101,6 +105,8 @@ export const fetchPodcastData = async (url: string): Promise<PodcastLookupResult
     const feedUrl = showInfo.feedUrl;
     
     if (!feedUrl) throw new Error("Could not find RSS feed for this podcast.");
+    
+    onLog?.(`RSS Feed URL found: ${feedUrl}`);
 
     const collection: PodcastMetadata = {
       id: showId,
@@ -115,14 +121,18 @@ export const fetchPodcastData = async (url: string): Promise<PodcastLookupResult
     let feedContent = "";
     try {
       console.log("Attempting direct RSS fetch:", feedUrl);
+      onLog?.("Attempting direct RSS fetch...");
       const feedRes = await fetchWithTimeout(feedUrl, { method: 'GET' }, 15000); // 15s timeout for direct
       if (feedRes.ok) {
         feedContent = await feedRes.text();
+        onLog?.("Direct RSS fetch successful.");
       } else {
         throw new Error(`Direct fetch status: ${feedRes.status}`);
       }
-    } catch (directError) {
-      console.warn("Direct RSS fetch failed, falling back to proxy:", directError);
+    } catch (directError: any) {
+      const msg = `Direct RSS fetch failed: ${directError.message}. Falling back to proxy...`;
+      console.warn(msg);
+      onLog?.(msg);
       try {
         const feedProxy = `https://api.allorigins.win/get?url=${encodeURIComponent(feedUrl)}`;
         const feedRes = await fetchWithTimeout(feedProxy, {}, 60000); // 60s timeout for proxy (slower for large files)
@@ -130,19 +140,23 @@ export const fetchPodcastData = async (url: string): Promise<PodcastLookupResult
         const feedData = await feedRes.json();
         if (!feedData.contents) throw new Error("RSS Proxy response empty");
         feedContent = feedData.contents;
+        onLog?.("RSS fetch via proxy successful.");
       } catch (proxyError: any) {
          console.error("RSS proxy failed:", proxyError);
+         onLog?.(`RSS proxy failed: ${proxyError.message}`);
          throw new Error("Failed to retrieve podcast RSS feed. The feed might be too large or inaccessible.");
       }
     }
 
     const episodes = parseRSSFeed(feedContent, collection.artistName, collection.artworkUrl);
+    onLog?.(`Parsed ${episodes.length} episodes from RSS feed.`);
 
     let matchedEpisodes = episodes;
     let isSpecific = false;
 
     if (slug) {
       console.log(`Looking for episode with slug: ${slug}`);
+      onLog?.(`Searching for episode with slug: ${slug}`);
       // Find episode where the slugified title contains the URL slug
       // OR where the URL slug contains the slugified title (for partial matches)
       const found = episodes.find(ep => {
@@ -153,10 +167,12 @@ export const fetchPodcastData = async (url: string): Promise<PodcastLookupResult
       
       if (found) {
         console.log(`Found specific episode: ${found.trackName}`);
+        onLog?.(`Found specific episode: "${found.trackName}"`);
         matchedEpisodes = [found];
         isSpecific = true;
       } else {
         console.warn(`Could not find episode matching slug: ${slug}`);
+        onLog?.(`Could not find episode matching slug: ${slug}`);
       }
     }
 
@@ -167,6 +183,7 @@ export const fetchPodcastData = async (url: string): Promise<PodcastLookupResult
     };
   } catch (error: any) {
     console.error("Error fetching podcast metadata:", error);
+    onLog?.(`Error fetching podcast metadata: ${error.message}`);
     throw new Error(error.message || "Failed to process podcast data.");
   }
 };
@@ -184,10 +201,13 @@ function bufferToBase64(buffer: ArrayBuffer): string {
   return window.btoa(binary);
 }
 
-export const downloadAudioAsBase64 = async (audioUrl: string): Promise<string> => {
+export const downloadAudioAsBase64 = async (audioUrl: string, onLog?: Logger): Promise<string> => {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
+
+    onLog?.(`Starting audio download from: ${audioUrl}`);
+    onLog?.("Timeout set to 90 seconds.");
 
     const response = await fetch(audioUrl, { signal: controller.signal });
     clearTimeout(timeoutId);
@@ -197,13 +217,26 @@ export const downloadAudioAsBase64 = async (audioUrl: string): Promise<string> =
     // Check size - Gemini inlineData limit is roughly 20-30MB base64 encoded
     // We'll increase the limit to 50MB to accommodate standard length episodes (approx 30-45 mins at 128kbps)
     const size = parseInt(response.headers.get('content-length') || '0');
+    
+    if (size > 0) {
+      onLog?.(`Content-Length: ${(size / 1024 / 1024).toFixed(2)} MB`);
+    }
+
     if (size > 50 * 1024 * 1024) {
       throw new Error(`File too large (${(size / 1024 / 1024).toFixed(1)}MB). Browser-based AI cannot process files larger than 50MB.`);
     }
 
+    onLog?.("Buffering audio data...");
     const buffer = await response.arrayBuffer();
-    return bufferToBase64(buffer);
+    onLog?.(`Audio buffered. Size: ${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB`);
+    
+    onLog?.("Converting to Base64...");
+    const base64 = bufferToBase64(buffer);
+    onLog?.("Base64 conversion complete.");
+
+    return base64;
   } catch (e: any) {
+    onLog?.(`Download failed: ${e.message}`);
     if (e.name === 'AbortError') throw new Error("Download timed out. The server is taking too long to respond.");
     throw new Error(e.message || "Could not retrieve audio. This is usually caused by CORS security settings on the podcast host.");
   }

@@ -30,3 +30,6 @@ export interface PodcastLookupResult {
   episodes: PodcastEpisode[];
   isSpecificEpisode: boolean;
 }
+
+export type Logger = (message: string) => void;
+

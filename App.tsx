@@ -4,9 +4,10 @@ import Header from './components/Header';
 import PodcastCard from './components/PodcastCard';
 import EpisodeList from './components/EpisodeList';
 import LogConsole from './components/LogConsole';
-import { fetchPodcastData, downloadAudioAsBase64 } from './services/podcastService';
+import PodcastSearchResults from './components/PodcastSearchResults';
+import { fetchPodcastData, downloadAudioAsBase64, searchPodcasts } from './services/podcastService';
 import { transcribeAudio } from './services/geminiService';
-import { PodcastMetadata, PodcastEpisode, TranscriptionResult } from './types';
+import { PodcastMetadata, PodcastEpisode, TranscriptionResult, PodcastSearchResult } from './types';
 
 // The App component handles the main application logic, state management for search, 
 // episode selection, and transcription processes.
@@ -15,12 +16,14 @@ const App: React.FC = () => {
   const [collection, setCollection] = useState<PodcastMetadata | null>(null);
   const [episodes, setEpisodes] = useState<PodcastEpisode[]>([]);
   const [selectedEpisode, setSelectedEpisode] = useState<PodcastEpisode | null>(null);
+  const [searchResults, setSearchResults] = useState<PodcastSearchResult[]>([]);
   const [transcription, setTranscription] = useState<TranscriptionResult>({
     text: '',
     status: 'idle'
   });
   const [loadingStep, setLoadingStep] = useState<string>('');
   const [logs, setLogs] = useState<string[]>([]);
+  const [viewState, setViewState] = useState<'initial' | 'results' | 'collection' | 'episode'>('initial');
 
   const addLog = (message: string) => {
     setLogs(prev => [...prev, message]);
@@ -34,30 +37,85 @@ const App: React.FC = () => {
     setCollection(null);
     setEpisodes([]);
     setSelectedEpisode(null);
+    setSearchResults([]);
     setLogs([]);
-    setLoadingStep('Locating RSS feed...');
+    setViewState('initial');
 
+    const isUrl = url.includes('apple.com') || url.startsWith('http');
+
+    if (isUrl) {
+      setLoadingStep('Locating RSS feed...');
+      try {
+        addLog(`Starting search for URL: ${url}`);
+        const data = await fetchPodcastData(url, addLog);
+        if (!data) throw new Error("Could not find podcast. Please check the URL.");
+        
+        setCollection(data.collection || null);
+        setEpisodes(data.episodes);
+        setViewState('collection');
+        
+        if (data.isSpecificEpisode && data.episodes.length === 1) {
+          setSelectedEpisode(data.episodes[0]);
+          setViewState('episode');
+          addLog(`Auto-selected specific episode: ${data.episodes[0].trackName}`);
+        }
+        
+        setTranscription({ text: '', status: 'idle' });
+        addLog("Search completed successfully.");
+      } catch (err: any) {
+        const errorMsg = err.message || "Unknown error";
+        setTranscription({ text: '', status: 'error', error: errorMsg });
+        addLog(`Search Error: ${errorMsg}`);
+      } finally {
+        setLoadingStep('');
+      }
+    } else {
+      setLoadingStep('Searching iTunes directory...');
+      try {
+        addLog(`Searching iTunes for term: "${url}"`);
+        const results = await searchPodcasts(url, addLog);
+        setSearchResults(results);
+        setViewState('results');
+        setTranscription({ text: '', status: 'idle' });
+        
+        if (results.length === 0) {
+          addLog("No results found.");
+        } else {
+          addLog(`Found ${results.length} podcasts.`);
+        }
+      } catch (err: any) {
+        const errorMsg = err.message || "Unknown error";
+        setTranscription({ text: '', status: 'error', error: errorMsg });
+        addLog(`Search Error: ${errorMsg}`);
+      } finally {
+        setLoadingStep('');
+      }
+    }
+  };
+
+  const handlePodcastSelect = async (result: PodcastSearchResult) => {
+    setLoadingStep(`Loading "${result.collectionName}"...`);
+    addLog(`Selected podcast: ${result.collectionName}`);
+    addLog(`Feed URL: ${result.feedUrl}`);
+
+    const lookupUrl = `https://podcasts.apple.com/podcast/id${result.collectionId}`;
+    addLog(`Constructed lookup URL: ${lookupUrl}`);
+    
     try {
-      addLog(`Starting search for URL: ${url}`);
-      const data = await fetchPodcastData(url, addLog);
-      if (!data) throw new Error("Could not find podcast. Please check the URL.");
-      
+      const data = await fetchPodcastData(lookupUrl, addLog);
+      if (!data) throw new Error("Could not load podcast details.");
+
       setCollection(data.collection || null);
       setEpisodes(data.episodes);
-      
-      if (data.isSpecificEpisode && data.episodes.length === 1) {
-        setSelectedEpisode(data.episodes[0]);
-        addLog(`Auto-selected specific episode: ${data.episodes[0].trackName}`);
-      }
-      
+      setViewState('collection');
       setTranscription({ text: '', status: 'idle' });
-      addLog("Search completed successfully.");
+      addLog("Podcast loaded successfully.");
     } catch (err: any) {
-      const errorMsg = err.message || "Unknown error";
-      setTranscription({ text: '', status: 'error', error: errorMsg });
-      addLog(`Search Error: ${errorMsg}`);
+       const errorMsg = err.message || "Unknown error";
+       setTranscription({ text: '', status: 'error', error: errorMsg });
+       addLog(`Load Error: ${errorMsg}`);
     } finally {
-      setLoadingStep('');
+       setLoadingStep('');
     }
   };
 
@@ -111,7 +169,7 @@ const App: React.FC = () => {
             <div className="relative flex-1 group">
               <input
                 type="text"
-                placeholder="Paste Apple Podcasts link here..."
+                placeholder="Enter podcast name or Apple Podcasts URL..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 className="w-full px-5 py-4 bg-slate-50 border-transparent focus:bg-white focus:border-purple-300 focus:ring-4 focus:ring-purple-100 rounded-2xl transition-all duration-300 outline-none text-gray-700"
@@ -132,7 +190,7 @@ const App: React.FC = () => {
                   Searching...
                 </>
               ) : (
-                'Find Podcast'
+                'Search'
               )}
             </button>
           </form>
@@ -157,7 +215,18 @@ const App: React.FC = () => {
         {/* Content Section */}
         <LogConsole logs={logs} />
         <div className="space-y-8">
-          {selectedEpisode && (
+          
+          {viewState === 'results' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <h3 className="text-xl font-bold text-gray-900 mb-4 px-1">Search Results</h3>
+              <PodcastSearchResults 
+                results={searchResults} 
+                onSelect={handlePodcastSelect} 
+              />
+            </div>
+          )}
+
+          {viewState !== 'results' && selectedEpisode && (
             <div className="space-y-6">
               <PodcastCard info={selectedEpisode} />
               
@@ -193,7 +262,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {isCompleted && (
+          {viewState !== 'results' && isCompleted && (
             <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-8 duration-700">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-bold text-gray-900">Transcript</h3>
@@ -218,7 +287,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {episodes.length > 1 && !selectedEpisode && (
+          {viewState !== 'results' && episodes.length > 1 && !selectedEpisode && (
             <EpisodeList 
               episodes={episodes} 
               onSelect={setSelectedEpisode} 
@@ -226,7 +295,7 @@ const App: React.FC = () => {
             />
           )}
 
-          {collection && !selectedEpisode && episodes.length === 0 && (
+          {viewState !== 'results' && collection && !selectedEpisode && episodes.length === 0 && (
             <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-200">
               <p className="text-slate-400">No episodes found in the feed.</p>
             </div>

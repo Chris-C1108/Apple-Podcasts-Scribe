@@ -31,5 +31,15 @@ export interface PodcastLookupResult {
   isSpecificEpisode: boolean;
 }
 
+export interface PodcastSearchResult {
+  collectionId: number;
+  collectionName: string;
+  artistName: string;
+  artworkUrl600: string;
+  feedUrl: string;
+  primaryGenreName: string;
+}
+
 export type Logger = (message: string) => void;
+
 

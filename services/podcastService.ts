@@ -1,5 +1,5 @@
 
-import { PodcastLookupResult, PodcastEpisode, PodcastMetadata, Logger } from '../types';
+import { PodcastLookupResult, PodcastEpisode, PodcastMetadata, Logger, PodcastSearchResult } from '../types';
 
 const parseRSSFeed = (xmlString: string, artistName: string, defaultArtwork: string): PodcastEpisode[] => {
   const parser = new DOMParser();
@@ -61,6 +61,47 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout 
   } catch (error) {
     clearTimeout(id);
     throw error;
+  }
+};
+
+export const searchPodcasts = async (term: string, onLog?: Logger): Promise<PodcastSearchResult[]> => {
+  try {
+    const encodedTerm = encodeURIComponent(term);
+    const searchUrl = `https://itunes.apple.com/search?term=${encodedTerm}&entity=podcast&limit=10`;
+    const searchProxy = `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`;
+
+    onLog?.(`Searching iTunes for: "${term}"`);
+
+    let searchData;
+    try {
+      const searchRes = await fetchWithTimeout(searchProxy, {}, 15000);
+      if (!searchRes.ok) throw new Error(`Proxy error: ${searchRes.status}`);
+      searchData = await searchRes.json();
+    } catch (e: any) {
+      console.error("Search proxy failed:", e);
+      onLog?.(`Search proxy failed: ${e.message}`);
+      if (e.name === 'AbortError') throw new Error("Search timed out. Please check your connection.");
+      throw new Error("Failed to contact podcast directory.");
+    }
+
+    if (!searchData.contents) throw new Error("Proxy response empty");
+    
+    const parsedSearch = JSON.parse(searchData.contents);
+    onLog?.(`Found ${parsedSearch.resultCount} results.`);
+
+    return parsedSearch.results.map((result: any) => ({
+      collectionId: result.collectionId,
+      collectionName: result.collectionName,
+      artistName: result.artistName,
+      artworkUrl600: result.artworkUrl600,
+      feedUrl: result.feedUrl,
+      primaryGenreName: result.primaryGenreName
+    }));
+
+  } catch (error: any) {
+    console.error("Error searching podcasts:", error);
+    onLog?.(`Error searching podcasts: ${error.message}`);
+    throw new Error(error.message || "Failed to search podcasts.");
   }
 };
 

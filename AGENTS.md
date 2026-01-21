@@ -90,3 +90,8 @@ Apple-Podcasts-Scribe is a web application that searches for Apple Podcasts, ret
 ## 5. Cursor/Copilot Rules
 *   *None currently present in repository.*
 *   Agents should infer best practices from the existing React+Vite+Tailwind patterns.
+
+## 6. Git & Deployment Protocols
+*   **Strict User Initiation**: Local git commits and GitHub pushes **MUST** be explicitly initiated by the user. Agents should not perform these actions automatically.
+*   **Local Commits**: Used for archiving work-in-progress and testing.
+*   **GitHub Pushes**: Directly triggers a release to **Production**. Use with caution.

@@ -68,7 +68,7 @@ export const searchPodcasts = async (term: string, onLog?: Logger): Promise<Podc
   try {
     const encodedTerm = encodeURIComponent(term);
     const searchUrl = `https://itunes.apple.com/search?term=${encodedTerm}&entity=podcast&limit=10`;
-    const searchProxy = `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`;
+    const searchProxy = `https://corsproxy.io/?${encodeURIComponent(searchUrl)}`;
 
     onLog?.(`Searching iTunes for: "${term}"`);
 
@@ -83,10 +83,9 @@ export const searchPodcasts = async (term: string, onLog?: Logger): Promise<Podc
       if (e.name === 'AbortError') throw new Error("Search timed out (10s limit). Please check your connection.");
       throw new Error("Failed to contact podcast directory.");
     }
-
-    if (!searchData.contents) throw new Error("Proxy response empty");
     
-    const parsedSearch = JSON.parse(searchData.contents);
+    // corsproxy returns direct JSON, no .contents wrapper
+    const parsedSearch = searchData;
     onLog?.(`Found ${parsedSearch.resultCount} results.`);
 
     return parsedSearch.results.map((result: any) => ({
@@ -118,8 +117,8 @@ export const fetchPodcastData = async (url: string, onLog?: Logger): Promise<Pod
     onLog?.(`Found Show ID: ${showId}${slug ? `, Slug: ${slug}` : ''}`);
 
     const lookupUrl = `https://itunes.apple.com/lookup?id=${showId}&entity=podcast`;
-    // Use allorigins as a proxy to bypass CORS for iTunes API which doesn't support CORS
-    const lookupProxy = `https://api.allorigins.win/get?url=${encodeURIComponent(lookupUrl)}`;
+    // Use corsproxy.io as a more reliable proxy
+    const lookupProxy = `https://corsproxy.io/?${encodeURIComponent(lookupUrl)}`;
     
     onLog?.(`Fetching podcast metadata via proxy: ${lookupProxy}`);
 
@@ -131,14 +130,14 @@ export const fetchPodcastData = async (url: string, onLog?: Logger): Promise<Pod
     } catch (e: any) {
       console.error("Lookup proxy failed:", e);
       onLog?.(`Lookup proxy failed: ${e.message}`);
-      // Fallback: If allorigins fails, try a user-friendly error or another proxy
+      // Fallback: If corsproxy fails, try a user-friendly error or another proxy
       if (e.name === 'AbortError') throw new Error("Request timed out. Please check your connection.");
       throw new Error("Failed to contact podcast directory. Network or proxy error.");
     }
     
-    if (!lookupData.contents) throw new Error("Proxy response empty");
-    
-    const parsedLookup = JSON.parse(lookupData.contents);
+    // Check if the response is from corsproxy (direct JSON) or allorigins (wrapped in contents)
+    // corsproxy.io returns the raw JSON directly, so we use it as is.
+    const parsedLookup = lookupData;
 
     if (parsedLookup.resultCount === 0) return null;
 
@@ -175,12 +174,11 @@ export const fetchPodcastData = async (url: string, onLog?: Logger): Promise<Pod
       console.warn(msg);
       onLog?.(msg);
       try {
-        const feedProxy = `https://api.allorigins.win/get?url=${encodeURIComponent(feedUrl)}`;
+        const feedProxy = `https://corsproxy.io/?${encodeURIComponent(feedUrl)}`;
         const feedRes = await fetchWithTimeout(feedProxy, {}, 60000); // 60s timeout for proxy (slower for large files)
         if (!feedRes.ok) throw new Error(`RSS Proxy status: ${feedRes.status}`);
-        const feedData = await feedRes.json();
-        if (!feedData.contents) throw new Error("RSS Proxy response empty");
-        feedContent = feedData.contents;
+        const feedText = await feedRes.text();
+        feedContent = feedText;
         onLog?.("RSS fetch via proxy successful.");
       } catch (proxyError: any) {
          console.error("RSS proxy failed:", proxyError);

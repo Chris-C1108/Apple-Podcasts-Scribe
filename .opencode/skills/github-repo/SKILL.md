@@ -104,7 +104,7 @@ git config user.email "user@example.com"
 git config user.name "Username"
 ```
 
-### Step 4: Create GitHub Repository
+### Step 5: Create GitHub Repository
 
 **Option A: Repository already exists**
 ```bash
@@ -120,7 +120,7 @@ curl -H "Authorization: token $TOKEN" \
      https://api.github.com/user/repos
 ```
 
-### Step 5: Add and Commit Files
+### Step 6: Add and Commit Files
 
 ```bash
 # Stage all files
@@ -133,7 +133,7 @@ git commit -m "Initial commit"
 git commit -m "Describe your changes"
 ```
 
-### Step 6: Push to GitHub
+### Step 7: Push to GitHub
 
 ```bash
 TOKEN=$(grep GITHUB_TOKEN .env | cut -d '=' -f2)
@@ -141,7 +141,7 @@ git remote set-url origin "https://$TOKEN@github.com/USERNAME/REPO_NAME.git"
 git push -u origin main
 ```
 
-### Step 7: Making Updates and Merges
+### Step 8: Making Updates and Merges
 
 **Making a commit and push:**
 ```bash

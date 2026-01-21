@@ -39,11 +39,29 @@ export default {
       const response = await fetch(targetUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "application/json, application/xml, text/xml, */*"
+          "Accept": "*/*"
         },
       });
 
-      const newResponse = new Response(response.body, response);
+      // Handle non-200 responses from the target
+      if (!response.ok) {
+         // Pass through the error status but add CORS headers
+         const errorBody = await response.text();
+         return new Response(errorBody, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": response.headers.get("Content-Type") || "text/plain"
+            }
+         });
+      }
+
+      const newResponse = new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers
+      });
       
       newResponse.headers.set("Access-Control-Allow-Origin", "*");
       newResponse.headers.set("Access-Control-Expose-Headers", "*");

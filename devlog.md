@@ -1,0 +1,36 @@
+# Development Log
+
+## 2026-01-21: Gemini Proxy Implementation & iTunes Search Fix
+
+### Gemini Proxy Infrastructure
+- **Objective**: Route Gemini API requests through a proxy to bypass client-side network restrictions (China accessibility).
+- **Implementation**:
+  - Created a new Cloudflare Worker script: `cloudflare-worker/gemini-worker.js`.
+    - Handles CORS preflight requests (`OPTIONS`).
+    - Proxies requests to `generativelanguage.googleapis.com`.
+    - Preserves all headers and body content.
+  - Created Wrangler configuration: `cloudflare-worker/wrangler-gemini.toml`.
+    - Configured worker name as `gemini-proxy`.
+    - Bound to custom domain: `gemni.uni-kui.shop`.
+  - **Status**: Deployed and verified via `test_proxy.py`.
+- **Frontend Integration**:
+  - Updated `services/geminiService.ts` to initialize `GoogleGenAI` with `httpOptions.baseUrl` pointing to the new proxy.
+
+### Podcast Search Service Fix
+- **Issue**: The `podscribe-proxy` worker was returning `403 Forbidden` errors when accessing the iTunes Search API. This is likely due to Apple blocking Cloudflare Worker IPs.
+- **Investigation**:
+  - Confirmed via `test_podcast_proxy.py` that the proxy was forwarding the 403 error from upstream.
+  - Verified that the iTunes Search API (`itunes.apple.com/search` and `/lookup`) supports CORS natively using `curl`.
+- **Resolution**:
+  - Modified `services/podcastService.ts` to bypass the proxy for Search and Lookup operations.
+  - The application now fetches directly from `itunes.apple.com` (client-side), which avoids the Cloudflare IP block.
+  - **Note**: The proxy is still used as a fallback for RSS feed fetching, as most RSS hosts do not support CORS.
+
+### Files Created/Modified
+- `cloudflare-worker/gemini-worker.js` (New)
+- `cloudflare-worker/wrangler-gemini.toml` (New)
+- `services/geminiService.ts` (Modified)
+- `services/podcastService.ts` (Modified)
+- `cloudflare-worker/worker.js` (Modified - attempted headers fix, mostly relevant for RSS proxying now)
+- `test_proxy.py` (New - testing utility)
+- `test_podcast_proxy.py` (New - testing utility)

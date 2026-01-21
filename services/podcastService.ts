@@ -78,19 +78,19 @@ export const searchPodcasts = async (term: string, onLog?: Logger): Promise<Podc
   try {
     const encodedTerm = encodeURIComponent(term);
     const searchUrl = `https://itunes.apple.com/search?term=${encodedTerm}&entity=podcast&limit=10`;
-    // Use our Cloudflare Worker proxy
-    const searchProxy = getProxyUrl(searchUrl);
+    // Direct fetch since iTunes supports CORS
+    // const searchProxy = getProxyUrl(searchUrl);
 
     onLog?.(`Searching iTunes for: "${term}"`);
 
     let searchData;
     try {
-      const searchRes = await fetchWithTimeout(searchProxy, {}, 10000);
-      if (!searchRes.ok) throw new Error(`Proxy error: ${searchRes.status}`);
+      const searchRes = await fetchWithTimeout(searchUrl, {}, 10000);
+      if (!searchRes.ok) throw new Error(`iTunes API error: ${searchRes.status}`);
       searchData = await searchRes.json();
     } catch (e: any) {
-      console.error("Search proxy failed:", e);
-      onLog?.(`Search proxy failed: ${e.message}`);
+      console.error("Search failed:", e);
+      onLog?.(`Search failed: ${e.message}`);
       if (e.name === 'AbortError') throw new Error("Search timed out (10s limit). Please check your connection.");
       throw new Error("Failed to contact podcast directory.");
     }
@@ -128,22 +128,22 @@ export const fetchPodcastData = async (url: string, onLog?: Logger): Promise<Pod
     onLog?.(`Found Show ID: ${showId}${slug ? `, Slug: ${slug}` : ''}`);
 
     const lookupUrl = `https://itunes.apple.com/lookup?id=${showId}&entity=podcast`;
-    // Use our Cloudflare Worker proxy
-    const lookupProxy = getProxyUrl(lookupUrl);
+    // Direct fetch since iTunes supports CORS
+    // const lookupProxy = getProxyUrl(lookupUrl);
     
-    onLog?.(`Fetching podcast metadata via proxy...`);
+    onLog?.(`Fetching podcast metadata...`);
 
     let lookupData;
     try {
-      const lookupRes = await fetchWithTimeout(lookupProxy, {}, 30000);
-      if (!lookupRes.ok) throw new Error(`Proxy error: ${lookupRes.status}`);
+      const lookupRes = await fetchWithTimeout(lookupUrl, {}, 30000);
+      if (!lookupRes.ok) throw new Error(`iTunes API error: ${lookupRes.status}`);
       lookupData = await lookupRes.json();
     } catch (e: any) {
-      console.error("Lookup proxy failed:", e);
-      onLog?.(`Lookup proxy failed: ${e.message}`);
+      console.error("Lookup failed:", e);
+      onLog?.(`Lookup failed: ${e.message}`);
       // Fallback: If proxy fails
       if (e.name === 'AbortError') throw new Error("Request timed out. Please check your connection.");
-      throw new Error("Failed to contact podcast directory. Network or proxy error.");
+      throw new Error("Failed to contact podcast directory. Network error.");
     }
     
     const parsedLookup = lookupData;

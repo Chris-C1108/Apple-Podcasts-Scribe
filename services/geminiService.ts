@@ -9,7 +9,12 @@ export const transcribeAudio = async (base64Audio: string, mimeType: string = 'a
   onLog?.("Initializing Gemini service...");
 
   // Initializing GoogleGenAI with the API key from named parameter
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ 
+    apiKey,
+    httpOptions: {
+      baseUrl: 'https://gemni.uni-kui.shop',
+    }
+  });
   
   // Validation logging
   if (!apiKey.startsWith('AIza')) {

@@ -5,7 +5,7 @@ export default {
         headers: {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Methods": "GET, HEAD, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Allow-Headers": "*",
         },
       });
     }
@@ -36,37 +36,51 @@ export default {
     }
 
     try {
+      // Improved headers to mimic a real browser and avoid WAF blocks
       const response = await fetch(targetUrl, {
+        method: request.method,
         headers: {
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "*/*"
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Referer": "https://podcasts.apple.com/" 
         },
+        redirect: 'follow'
       });
 
-      // Handle non-200 responses from the target
+      const newHeaders = new Headers(response.headers);
+      newHeaders.set("Access-Control-Allow-Origin", "*");
+      newHeaders.set("Access-Control-Expose-Headers", "*");
+
+      // If upstream returns 403/401, try to provide a useful error body
       if (!response.ok) {
-         // Pass through the error status but add CORS headers
-         const errorBody = await response.text();
-         return new Response(errorBody, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: {
-                "Access-Control-Allow-Origin": "*",
-                "Content-Type": response.headers.get("Content-Type") || "text/plain"
-            }
-         });
+        let errorBody = "";
+        try {
+          errorBody = await response.text();
+        } catch (e) {
+          // ignore read error
+        }
+
+        if (!errorBody && (response.status === 403 || response.status === 401)) {
+           errorBody = JSON.stringify({ 
+             error: `Upstream service (${new URL(targetUrl).hostname}) returned ${response.status}. Request might be blocked.` 
+           });
+           newHeaders.set("Content-Type", "application/json");
+        }
+        
+        return new Response(errorBody, {
+           status: response.status,
+           statusText: response.statusText,
+           headers: newHeaders
+        });
       }
 
-      const newResponse = new Response(response.body, {
+      return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
-        headers: response.headers
+        headers: newHeaders
       });
       
-      newResponse.headers.set("Access-Control-Allow-Origin", "*");
-      newResponse.headers.set("Access-Control-Expose-Headers", "*");
-      
-      return newResponse;
     } catch (error) {
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500,

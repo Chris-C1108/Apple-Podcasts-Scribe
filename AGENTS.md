@@ -61,10 +61,17 @@ Apple-Podcasts-Scribe is a web application that searches for Apple Podcasts, ret
     *   Pass the `addLog` (or `onLog`) callback to services to report progress.
     *   Type definition: `export type Logger = (message: string) => void;`
 *   **Console**: Use `console.error` for debugging, but *always* notify the user via `addLog` or UI state for critical failures.
-*   **Proxy Handling**: Network requests to iTunes/RSS are proxied via a custom Cloudflare Worker.
-    *   The worker code is in `cloudflare-worker/worker.js`.
-    *   `PROXY_BASE_URL` in `services/podcastService.ts` points to the deployed worker.
-    *   Handle `AbortError` for timeouts.
+*   **Proxy Handling**:
+    *   **Podcast RSS Proxy**: Network requests to RSS feeds are proxied via a custom Cloudflare Worker to handle CORS reliably.
+        *   **Worker URL**: `https://podscribe-proxy.uni-kui.shop`
+        *   **Source Code**: `cloudflare-worker/worker.js`
+        *   **Configuration**: `cloudflare-worker/wrangler.toml`
+        *   *Note*: iTunes Search/Lookup APIs are accessed DIRECTLY (CORS supported), bypassing the proxy to avoid IP blocks.
+    *   **Gemini API Proxy**: Google GenAI requests are proxied to bypass network restrictions.
+        *   **Worker URL**: `https://gemni.uni-kui.shop`
+        *   **Source Code**: `cloudflare-worker/gemini-worker.js`
+        *   **Configuration**: `cloudflare-worker/wrangler-gemini.toml`
+        *   Configured in `services/geminiService.ts` via `httpOptions.baseUrl`.
 
 ### Naming Conventions
 *   **Files**: PascalCase for Components (`PodcastCard.tsx`), camelCase for utilities/services (`podcastService.ts`).

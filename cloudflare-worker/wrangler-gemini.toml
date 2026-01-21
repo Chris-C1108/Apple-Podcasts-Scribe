@@ -1,0 +1,9 @@
+name = "gemini-proxy"
+main = "gemini-worker.js"
+compatibility_date = "2024-02-01"
+
+# Bind to the custom domain as requested
+# NOTE: User requested "gemni.uni-kui.shop". If this was a typo for "gemini", please correct it below.
+[[routes]]
+pattern = "gemni.uni-kui.shop"
+custom_domain = true

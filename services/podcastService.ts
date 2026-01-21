@@ -249,6 +249,31 @@ function bufferToBase64(buffer: ArrayBuffer): string {
   return window.btoa(binary);
 }
 
+export const downloadAudioAsBlob = async (audioUrl: string, onLog?: Logger): Promise<Blob> => {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+
+    onLog?.(`Starting audio download (Blob) from: ${audioUrl}`);
+    const response = await fetch(audioUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) throw new Error(`Download failed (HTTP ${response.status})`);
+
+    const size = parseInt(response.headers.get('content-length') || '0');
+    if (size > 0) onLog?.(`Content-Length: ${(size / 1024 / 1024).toFixed(2)} MB`);
+
+    onLog?.("Buffering audio data...");
+    const blob = await response.blob();
+    onLog?.(`Audio buffered. Size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+    
+    return blob;
+  } catch (e: any) {
+    onLog?.(`Download failed: ${e.message}`);
+    throw new Error(e.message || "Could not retrieve audio.");
+  }
+};
+
 export const downloadAudioAsBase64 = async (audioUrl: string, onLog?: Logger): Promise<string> => {
   try {
     const controller = new AbortController();

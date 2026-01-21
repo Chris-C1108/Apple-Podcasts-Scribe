@@ -6,7 +6,8 @@ This document provides context and guidelines for AI agents working on the Apple
 Apple-Podcasts-Scribe is a web application that searches for Apple Podcasts, retrieves their RSS feeds, and uses Google Gemini 2.5 Flash to transcribe episodes.
 *   **Stack**: React 19, TypeScript, Vite, Tailwind CSS.
 *   **AI Service**: Google GenAI SDK (`@google/genai`).
-*   **Key Features**: iTunes Search API integration, RSS parsing, Audio-to-Base64 conversion, Gemini transcription, Real-time UI logging.
+*   **Key Features**: iTunes Search API integration, RSS parsing, Audio-to-Base64 conversion, Gemini transcription (Streamed & Batch), Real-time UI logging.
+*   **Current Version**: 0.1.0
 
 ## 2. Operational Commands
 
@@ -53,7 +54,7 @@ Apple-Podcasts-Scribe is a web application that searches for Apple Podcasts, ret
     *   `PodcastSearchResults.tsx`: Search results grid.
 *   **`services/`**: Business logic and API interactions.
     *   `podcastService.ts`: iTunes API, Proxy calls, RSS parsing.
-    *   `geminiService.ts`: Interaction with Google GenAI.
+    *   `geminiService.ts`: Interaction with Google GenAI. Now supports `transcribeAudioStream` for long-form content.
 *   **`types.ts`**: Centralized type definitions.
 
 ### Logging & Error Handling

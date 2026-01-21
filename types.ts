@@ -19,8 +19,17 @@ export interface PodcastEpisode {
   trackTimeMillis?: number;
 }
 
+export interface LyricItem {
+  start: number;
+  end: number;
+  text: string;
+  speaker?: string;
+  isMusic?: boolean;
+}
+
 export interface TranscriptionResult {
   text: string;
+  lyrics?: LyricItem[];
   status: 'idle' | 'fetching' | 'processing' | 'completed' | 'error';
   error?: string;
 }

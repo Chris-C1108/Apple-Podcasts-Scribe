@@ -1,5 +1,22 @@
 # Development Log
 
+## 2026-01-21: Streamed Transcription & Versioning
+
+### Streamed Audio Transcription
+- **Objective**: Improve user experience by displaying transcription progress in real-time and handle long audio files more reliably.
+- **Implementation**:
+  - Implemented client-side audio chunking using `Blob.slice()` (no FFmpeg required).
+  - Created `transcribeAudioStream` in `services/geminiService.ts`.
+    - Splits audio into 60s chunks with 15s overlap.
+    - Uses a robust deduplication algorithm (`mergeLyrics`) to seamlessly stitch chunks.
+    - Supports realtime `onProgress` callbacks.
+  - Updated `App.tsx` to consume the stream and display a new "Karaoke-style" lyric view.
+  - Added support for `LyricItem` structure (start, end, speaker, isMusic).
+
+### Versioning
+- **Action**: Bumped version to `0.1.0`.
+- **UI**: Added version display in the top-right corner of the app and in the initialization logs.
+
 ## 2026-01-21: Gemini Proxy Implementation & iTunes Search Fix
 
 ### Gemini Proxy Infrastructure

@@ -5,8 +5,8 @@ import PodcastCard from './components/PodcastCard';
 import EpisodeList from './components/EpisodeList';
 import LogConsole from './components/LogConsole';
 import PodcastSearchResults from './components/PodcastSearchResults';
-import { fetchPodcastData, downloadAudioAsBase64, searchPodcasts } from './services/podcastService';
-import { transcribeAudio } from './services/geminiService';
+import { downloadAudioAsBase64, downloadAudioAsBlob, fetchPodcastData, searchPodcasts } from './services/podcastService';
+import { transcribeAudio, transcribeAudioStream } from './services/geminiService';
 import { PodcastMetadata, PodcastEpisode, TranscriptionResult, PodcastSearchResult } from './types';
 
 // The App component handles the main application logic, state management for search, 
@@ -24,6 +24,12 @@ const App: React.FC = () => {
   const [loadingStep, setLoadingStep] = useState<string>('');
   const [logs, setLogs] = useState<string[]>([]);
   const [viewState, setViewState] = useState<'initial' | 'results' | 'collection' | 'episode'>('initial');
+  
+  const APP_VERSION = "0.1.0";
+
+  React.useEffect(() => {
+    addLog(`System initialized. Version: ${APP_VERSION}`);
+  }, []);
 
   const addLog = (message: string) => {
     setLogs(prev => [...prev, message]);
@@ -131,14 +137,20 @@ const App: React.FC = () => {
     addLog(`Starting transcription for: ${selectedEpisode.trackName}`);
 
     try {
-      const base64 = await downloadAudioAsBase64(selectedEpisode.episodeUrl, addLog);
+      const blob = await downloadAudioAsBlob(selectedEpisode.episodeUrl, addLog);
       
       setLoadingStep('AI is generating transcript...');
-      addLog("Audio downloaded. Starting AI transcription...");
+      addLog("Audio downloaded. Starting AI transcription stream...");
       
-      const text = await transcribeAudio(base64, 'audio/mpeg', addLog);
+      const finalText = await transcribeAudioStream(blob, (lyrics, partialText) => {
+        setTranscription({ 
+          text: partialText,
+          lyrics: lyrics,
+          status: 'processing'
+        });
+      }, addLog);
       
-      setTranscription({ text, status: 'completed' });
+      setTranscription(prev => ({ ...prev, text: finalText, status: 'completed' }));
       addLog("Transcription completed successfully.");
     } catch (err: any) {
       const errorMsg = err.message || "Failed to process audio.";
@@ -158,9 +170,16 @@ const App: React.FC = () => {
   const isCompleted = transcription.status === 'completed';
   const isError = transcription.status === 'error';
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="min-h-screen pb-20 px-4 sm:px-6 lg:px-8 bg-slate-50">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto relative">
+        <div className="absolute top-0 right-0 p-4 text-xs text-slate-300 font-mono">v0.1.0</div>
         <Header />
 
         {/* Search Section */}
@@ -262,10 +281,12 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {viewState !== 'results' && isCompleted && (
+          {viewState !== 'results' && (isCompleted || (isProcessing && (transcription.text || (transcription.lyrics && transcription.lyrics.length > 0)))) && (
             <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-8 duration-700">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-gray-900">Transcript</h3>
+                <h3 className="text-xl font-bold text-gray-900">
+                  {isProcessing ? 'Generating Transcript...' : 'Transcript'}
+                </h3>
                 <button 
                   onClick={() => {
                     navigator.clipboard.writeText(transcription.text);
@@ -280,9 +301,31 @@ const App: React.FC = () => {
                 </button>
               </div>
               <div className="prose prose-purple max-w-none">
-                <div className="whitespace-pre-wrap text-gray-700 leading-relaxed font-serif text-lg">
-                  {transcription.text}
-                </div>
+                {transcription.lyrics && transcription.lyrics.length > 0 ? (
+                  <div className="space-y-6">
+                    {transcription.lyrics.map((line, i) => (
+                      <div key={i} className="flex gap-4 group hover:bg-slate-50 p-2 rounded-lg transition-colors">
+                        <span className="text-xs text-slate-400 font-mono pt-1.5 select-none w-12 text-right">
+                           {formatTime(line.start)}
+                        </span>
+                        <div className="flex-1">
+                          {line.speaker && !line.isMusic && (
+                            <span className="font-bold text-xs uppercase tracking-wide text-purple-600 block mb-1">
+                              {line.speaker}
+                            </span>
+                          )}
+                          <p className={`text-gray-800 leading-relaxed font-serif text-lg ${line.isMusic ? 'italic text-slate-500' : ''}`}>
+                            {line.isMusic ? '🎵 ' : ''}{line.text}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="whitespace-pre-wrap text-gray-700 leading-relaxed font-serif text-lg">
+                    {transcription.text}
+                  </div>
+                )}
               </div>
             </div>
           )}

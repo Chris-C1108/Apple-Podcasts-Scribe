@@ -139,11 +139,20 @@ export const fetchPodcastData = async (url: string, onLog?: Logger): Promise<Pod
       if (!lookupRes.ok) throw new Error(`iTunes API error: ${lookupRes.status}`);
       lookupData = await lookupRes.json();
     } catch (e: any) {
-      console.error("Lookup failed:", e);
-      onLog?.(`Lookup failed: ${e.message}`);
-      // Fallback: If proxy fails
-      if (e.name === 'AbortError') throw new Error("Request timed out. Please check your connection.");
-      throw new Error("Failed to contact podcast directory. Network error.");
+      console.warn("Direct lookup failed, trying proxy...", e);
+      onLog?.(`Direct lookup failed: ${e.message}. Trying proxy...`);
+      
+      try {
+        const proxyLookupUrl = getProxyUrl(lookupUrl);
+        const lookupRes = await fetchWithTimeout(proxyLookupUrl, {}, 30000);
+        if (!lookupRes.ok) throw new Error(`Proxy lookup error: ${lookupRes.status}`);
+        lookupData = await lookupRes.json();
+      } catch (proxyError: any) {
+        console.error("Lookup failed:", proxyError);
+        onLog?.(`Lookup failed: ${proxyError.message}`);
+        if (proxyError.name === 'AbortError') throw new Error("Request timed out. Please check your connection.");
+        throw new Error("Failed to contact podcast directory. Network error.");
+      }
     }
     
     const parsedLookup = lookupData;

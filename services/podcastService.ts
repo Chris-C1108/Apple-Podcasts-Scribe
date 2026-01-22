@@ -182,35 +182,44 @@ export const fetchPodcastData = async (url: string, onLog?: Logger): Promise<Pod
       description: showInfo.primaryGenreName
     };
 
-    // Try fetching RSS feed directly first (many hosts support CORS)
-    // If that fails, fallback to proxy
+    // Try fetching RSS feed via Direct and Proxy in parallel (Race) to minimize wait time
+    // Promise.any will resolve with the first successful response (200 OK)
     let feedContent = "";
-    try {
-      console.log("Attempting direct RSS fetch:", feedUrl);
-      onLog?.("Attempting direct RSS fetch...");
-      const feedRes = await fetchWithTimeout(feedUrl, { method: 'GET' }, 15000); // 15s timeout for direct
-      if (feedRes.ok) {
-        feedContent = await feedRes.text();
-        onLog?.("Direct RSS fetch successful.");
-      } else {
-        throw new Error(`Direct fetch status: ${feedRes.status}`);
-      }
-    } catch (directError: any) {
-      const msg = `Direct RSS fetch failed: ${directError.message}. Falling back to proxy...`;
-      console.warn(msg);
-      onLog?.(msg);
+    const directFetch = async () => {
       try {
-        const feedProxy = getProxyUrl(feedUrl);
-        const feedRes = await fetchWithTimeout(feedProxy, {}, 60000); // 60s timeout for proxy (slower for large files)
-        if (!feedRes.ok) throw new Error(`RSS Proxy status: ${feedRes.status}`);
-        const feedText = await feedRes.text();
-        feedContent = feedText;
-        onLog?.("RSS fetch via proxy successful.");
-      } catch (proxyError: any) {
-         console.error("RSS proxy failed:", proxyError);
-         onLog?.(`RSS proxy failed: ${proxyError.message}`);
-         throw new Error("Failed to retrieve podcast RSS feed. The feed might be too large or inaccessible.");
+        const res = await fetchWithTimeout(feedUrl, { method: 'GET' }, 5000); // 5s timeout for direct
+        if (!res.ok) throw new Error(`Direct status: ${res.status}`);
+        return await res.text();
+      } catch (e: any) {
+        // console.warn("Direct fetch failed (will be ignored if proxy succeeds):", e.message);
+        throw e;
       }
+    };
+
+    const proxyFetch = async () => {
+      try {
+        const proxyUrl = getProxyUrl(feedUrl);
+        const res = await fetchWithTimeout(proxyUrl, {}, 30000); // 30s timeout for proxy
+        if (!res.ok) throw new Error(`Proxy status: ${res.status}`);
+        return await res.text();
+      } catch (e: any) {
+        // console.warn("Proxy fetch failed:", e.message);
+        throw e;
+      }
+    };
+
+    try {
+      onLog?.("Fetching RSS feed (racing Direct vs Proxy)...");
+      feedContent = await Promise.any([directFetch(), proxyFetch()]);
+      onLog?.("RSS fetch successful.");
+    } catch (aggregateError: any) {
+      console.error("All RSS fetch attempts failed:", aggregateError);
+      onLog?.("All RSS fetch attempts failed.");
+      
+      // Construct a detailed error message from the AggregateError
+      const errors = aggregateError.errors || [];
+      const errorMsgs = errors.map((e: any) => e.message).join(", ");
+      throw new Error(`Failed to retrieve RSS feed. Errors: ${errorMsgs}`);
     }
 
     const episodes = parseRSSFeed(feedContent, collection.artistName, collection.artworkUrl);

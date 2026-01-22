@@ -78,9 +78,7 @@ export const searchPodcasts = async (term: string, onLog?: Logger): Promise<Podc
   try {
     const encodedTerm = encodeURIComponent(term);
     const searchUrl = `https://itunes.apple.com/search?term=${encodedTerm}&entity=podcast&limit=10`;
-    // Direct fetch since iTunes supports CORS
-    // const searchProxy = getProxyUrl(searchUrl);
-
+    
     onLog?.(`Searching iTunes for: "${term}"`);
 
     let searchData;
@@ -89,10 +87,20 @@ export const searchPodcasts = async (term: string, onLog?: Logger): Promise<Podc
       if (!searchRes.ok) throw new Error(`iTunes API error: ${searchRes.status}`);
       searchData = await searchRes.json();
     } catch (e: any) {
-      console.error("Search failed:", e);
-      onLog?.(`Search failed: ${e.message}`);
-      if (e.name === 'AbortError') throw new Error("Search timed out (10s limit). Please check your connection.");
-      throw new Error("Failed to contact podcast directory.");
+      console.warn("Direct search failed, trying proxy...", e);
+      onLog?.(`Direct search failed: ${e.message}. Trying proxy...`);
+      
+      try {
+        const searchProxy = getProxyUrl(searchUrl);
+        const searchRes = await fetchWithTimeout(searchProxy, {}, 10000);
+        if (!searchRes.ok) throw new Error(`Proxy search error: ${searchRes.status}`);
+        searchData = await searchRes.json();
+      } catch (proxyError: any) {
+        console.error("Search failed:", proxyError);
+        onLog?.(`Search failed: ${proxyError.message}`);
+        if (proxyError.name === 'AbortError') throw new Error("Search timed out (10s limit). Please check your connection.");
+        throw new Error("Failed to contact podcast directory.");
+      }
     }
     
     // Cloudflare worker returns the direct JSON response

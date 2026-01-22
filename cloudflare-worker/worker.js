@@ -36,14 +36,21 @@ export default {
     }
 
     try {
-      // Improved headers to mimic a real browser and avoid WAF blocks
+      let userAgent = request.headers.get("User-Agent") || "";
+      
+      // If no UA or it looks like a script (curl, wget, python, etc), use a real browser UA
+      // This ensures even command line tools get through the WAF
+      if (!userAgent || userAgent.match(/(curl|wget|python|axios|node|go-http)/i)) {
+        userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
+      }
+
       const response = await fetch(targetUrl, {
         method: request.method,
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
-          "Referer": "https://podcasts.apple.com/" 
+          "User-Agent": userAgent,
+          "Accept": "application/json, text/javascript, */*; q=0.01",
+          // Removing Referer to avoid triggering anti-scraping protections for specific terms
+          // "Referer": "https://podcasts.apple.com/" 
         },
         redirect: 'follow'
       });

@@ -67,7 +67,11 @@ Apple-Podcasts-Scribe is a web application that searches for Apple Podcasts, ret
         *   **Worker URL**: `https://podscribe-proxy.uni-kui.shop`
         *   **Source Code**: `cloudflare-worker/worker.js`
         *   **Configuration**: `cloudflare-worker/wrangler.toml`
+<<<<<<< HEAD
         *   *Note*: iTunes Search/Lookup APIs are primarily accessed DIRECTLY. However, a **proxy fallback** logic is implemented in `podcastService.ts`. If the direct connection to `itunes.apple.com` fails (e.g., due to strict network conditions or CORS blocks), the request is automatically retried via the proxy.
+=======
+        *   *Note*: iTunes Search/Lookup APIs are accessed DIRECTLY (CORS supported) by default. The app includes a fallback mechanism to use the proxy if the direct search fails or is blocked.
+>>>>>>> b651b03 (fix: resolve proxy 404/403 errors and implement robust search fallback)
     *   **Gemini API Proxy**: Google GenAI requests are proxied to bypass network restrictions.
         *   **Worker URL**: `https://gemni.uni-kui.shop`
         *   **Source Code**: `cloudflare-worker/gemini-worker.js`
@@ -92,6 +96,7 @@ Apple-Podcasts-Scribe is a web application that searches for Apple Podcasts, ret
     1.  **Direct URL**: Apple Podcasts URL.
     2.  **Keyword Search**: iTunes Search API.
 *   Agents should preserve this dual-mode behavior.
+*   **Fallback Logic**: The search function `searchPodcasts` first attempts a direct call to the iTunes API. If it fails (e.g., CORS, Network Error), it automatically retries using the `podscribe-proxy`.
 
 ### Environment Variables
 *   `GEMINI_API_KEY`: Required for transcription. Access via `process.env.API_KEY` (handled by Vite define/env replacement usually, but check `vite.config.ts` if adding new env vars).
